@@ -1,13 +1,12 @@
-""" v1
-- Simple json format with logic
-- Support action: Ignore, Insert, Update, Query
-- If/else logic is required when try: Ignore, Insert, Update
-- Option Always to skip check If/else | action Query not support IF
-- Save results each step -> input next step
-- Logic If/else support OR: simple operator (compare value or lenght)
+""" v1.2
+- Almost same as v1
+- Diff: func process()
+ + now support IF/Else for all Action (not required)
+ + INPUT_TYPE is required when used IF
+ + if no IF then just do the Action and go to next step
 """
 
-from typing import Callable, Any
+from typing import Any
 
 from lib import action
 from lib.const import *
@@ -45,28 +44,6 @@ json_schema = [
             # TODO: maybe operator here? like add, slice...
             KEY: ["macs"],
         },
-        ALWAYS: True,
-        # AS: "results",  # result of this step
-        # THEN: [
-        #     # sub step
-        #     {
-        #         "name": "03_try_ignore_after_query_02",
-        #         DO: IGNORE,
-        #         INPUT_TYPE: {
-        #             FROM: FROM_STEP,
-        #             RESULT_FROM_STEP: "02_query_with_macs"
-        #         },
-        #         IF: {
-        #             OR: [
-        #                 {
-        #                     CHECK_LEN: True,
-        #                     OPERATOR: GREATER_OR_EQUAL,
-        #                     VALUE: 2,
-        #                 },
-        #             ]
-        #         }
-        #     },
-        # ]
     },
     {
         "name": "03_try_ignore_if_found_more_than_1_results",
@@ -105,20 +82,6 @@ json_schema = [
     {
         "name": "05_try_insert_default",
         DO: INSERT,
-        ALWAYS: True,
-        # INPUT_TYPE: {
-        #     FROM: FROM_STEP,
-        #     RESULT_FROM_STEP: "02_query_with_macs"
-        # },
-        # IF: {
-        #     OR: [
-        #         {
-        #             CHECK_LEN: True,
-        #             OPERATOR: EQUAL,
-        #             VALUE: 0,
-        #         },
-        #     ]
-        # }
     }
 ]
 
@@ -223,36 +186,34 @@ def process(step: dict, results_map: dict) -> (bool, Any):
     :param results_map:
     :return: continue execute next step?, result of this step
     """
+    if IF in step and INPUT_TYPE not in step:
+        raise Exception("Require INPUT_TYPE with IF")
+
     exec_next_step = True
     results = None
 
     # get function to execute action
     action_name = step[DO]
-    do_action = get_action(action_name)
 
-    # [+] check flag ALWAYS | or after QUERY action we'll always execute next step
-    if step.get(ALWAYS) or action_name == QUERY:
-        results = do_action(data_inp)
-        return exec_next_step, results
-
-    # [+] do others action with if else logic
-
-    # input type -> get value to compare
-    input_type = step[INPUT_TYPE]  # type: dict
-
+    # required IF ELSE
     if action_name == IGNORE:
         if IF not in step:
             raise Exception("Missing IF to do IGNORE")
 
-    elif action_name == INSERT:
-        pass
+    do_action = get_action(action_name)
 
-    elif action_name == UPDATE:
-        pass
-
-    # return if no logic if else
+    # just do action if no IF ELSE
     if IF not in step:
+        try:
+            results = do_action(data_inp)
+        except Exception as ex:
+            exec_next_step = False
+            raise ex
+
         return exec_next_step, results
+
+    # input type -> get value to compare
+    input_type = step[INPUT_TYPE]  # type: dict
 
     # check if else logic -> do action
     ok = if_else(input_type, step[IF], results_map)

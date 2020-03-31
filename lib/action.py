@@ -10,7 +10,8 @@ def ignore(data):
 def query(data):
     print("... -> query")
     time.sleep(0.2)
-    results = []
+    # results = [1,2]
+    results = [1]
     return results
 
 
